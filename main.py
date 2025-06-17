@@ -57,10 +57,10 @@ def generate_next_question(context):
     messages = [
         SystemMessage(content=
                       """
-                      You are a GenAI tutor helping the user assess their knowledge and goals in Generative AI. 
-                      Based on their previous answers and whether they are correct, you will ask one follow-up non-trivial question to assess their understanding. 
-                      The question should ask about their current progress in GenAI learning and the choices should be the next steps in their learning.
-                      Return the question followed by a list of 3-5 single-choice options.
+                      You are a GenAI tutor helping the user assess their knowledge and create learning goals in Generative AI. 
+                      Based on their previous answers, you will ask one follow-up non-trivial question to assess their understanding of GenAI and which subfields they want to learn. 
+                      The question should ask about their current progress in GenAI learning and the choices should impact the next steps in their learning.
+                      Return the question followed by a list of 3-5 single-choice options, one in its own row.
                       """
                       ),
         HumanMessage(content=f"Here are the previous responses: {context}. "
@@ -76,7 +76,9 @@ def handle_answer(radio_answer, other_answer):
 
     user_responses.append(answer)
     if len(user_responses) >= 10:
+        # question_input, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn
         return (
+            gr.update(visible=False),
             gr.update(visible=False),
             gr.update(visible=False),
             gr.update(visible=False),
@@ -90,9 +92,12 @@ def handle_answer(radio_answer, other_answer):
     skip_visible = len(user_responses) >= 3
 
     return (
+        # question_input, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn
         gr.update(choices=next_choices, label=next_question, visible=True),
         gr.update(visible=True),
+        gr.update(visible=True),
         gr.update(visible=skip_visible),
+        gr.update(visible=False),
         gr.update(visible=False),
         gr.update(visible=False),
         gr.update(visible=True)
@@ -113,14 +118,15 @@ def summarize_results(responses, preferences):
     response = llm.invoke(messages)
     return response.content
 
-# Finalize and display learning recommendations
-def finalize_learning_path(preferences):
+# Update learning recommendations based on preference
+def update_preference(preferences):
     global learning_preferences
     learning_preferences = preferences
     return gr.update(value=summarize_results(user_responses, learning_preferences), visible=True)
 
 # Skip to summary
 def skip_to_summary():
+    # question_input, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn
     return (
         gr.update(visible=False),
         gr.update(visible=False),
@@ -136,6 +142,7 @@ def skip_to_summary():
 def restart():
     global user_responses
     user_responses= []
+    # question_input, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn
     return (
         gr.update(choices=initial_choices, label=initial_question, visible=True),
         gr.update(visible=True),
@@ -151,7 +158,7 @@ with gr.Blocks() as demo:
     gr.Markdown("# Learn Generative AI")
     gr.Markdown("Start your GenAI journey by telling us why you're here. We'll guide you from there.")
 
-    question_output = gr.Radio(label=initial_question, choices=initial_choices + ["Other (please specify)"], interactive=True)
+    question_input = gr.Radio(label=initial_question, choices=initial_choices + ["Other (please specify)"], interactive=True)
     other_input = gr.Textbox(label="Other (please specify)")
     next_btn = gr.Button("Next")
     skip_btn = gr.Button("Skip to Summary", visible=False)
@@ -161,10 +168,20 @@ with gr.Blocks() as demo:
     preference_submit_btn = gr.Button("Update my learning plan", visible=False)
     restart_btn = gr.Button("Restart the survey", visible=False)
 
-    next_btn.click(handle_answer, inputs=[question_output, other_input], outputs=[question_output, next_btn, skip_btn, preference_output, summary_output, restart_btn])
-    skip_btn.click(skip_to_summary, outputs=[question_output, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn])
-    preference_submit_btn.click(finalize_learning_path, inputs=preference_output, outputs=summary_output)
-    restart_btn.click(restart, outputs=[question_output, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn])
+    next_btn.click(
+        handle_answer,
+        inputs=[question_input, other_input],
+        outputs=[question_input, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn])
+    skip_btn.click(
+        skip_to_summary,
+        outputs=[question_input, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn])
+    preference_submit_btn.click(
+        update_preference,
+        inputs=preference_output,
+        outputs=summary_output)
+    restart_btn.click(
+        restart,
+        outputs=[question_input, other_input, next_btn, skip_btn, preference_output, summary_output, preference_submit_btn, restart_btn])
 
 if __name__ == "__main__":
     demo.launch()
